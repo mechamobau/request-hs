@@ -5,8 +5,7 @@ module Types.BTC where
  
 import Data.Aeson
 
-import Data.Char
-
+import Data.Map.Strict
 import Data.Text as T
 
 import Generics.Deriving.Base
@@ -56,23 +55,11 @@ instance ToJSON Time where
     ]
 
 -- | Bitcoin Price Index (BPI)
-data BPI = BPI
-            {
-                usd :: Currency
-              , btc :: Currency
-            } deriving (Show)
+data BPI = Map String Currency deriving (Show, Generic)
 
-instance FromJSON BPI where
-  parseJSON (Object v) =
-    BPI <$> v .: "USD"
-        <*> v .: "BTC"
+instance FromJSON BPI
 
-instance ToJSON BPI where
-  toJSON (BPI usd btc) =
-    object [
-        "USD" .= usd
-      , "BTC" .= btc
-    ]
+instance ToJSON BPI
 
 data BTC = BTC
             {
