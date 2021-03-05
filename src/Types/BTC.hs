@@ -55,10 +55,9 @@ instance ToJSON Time where
     ]
 
 -- | Bitcoin Price Index (BPI)
-data BPI = Map String Currency deriving (Show, Generic)
+newtype BPI = BPI (Map String Currency) deriving (Show, Generic)
 
 instance FromJSON BPI
-
 instance ToJSON BPI
 
 data BTC = BTC
