@@ -1,12 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Lib
-    ( makeRequest
+    ( middlewareRequest
     ) where
 
 import Prelude as P
 
 import Data.Map.Strict as STS
+
+import Data.Maybe (fromMaybe)
 
 import Data.Bifunctor (second)
 
@@ -14,11 +16,35 @@ import Control.Monad.IO.Class
 
 import Data.ByteString.Lazy.UTF8 as BSU
 
+import Data.Text
+
+import Data.List as L
+
 import Data.Aeson as AS
 import Network.HTTP.Req
 
 import Types.BTC
 import qualified Data.Bifunctor
+
+listOfCurrencyLabels :: [(String, String)]
+listOfCurrencyLabels = [
+    ("USD", "United States Dollar"),
+    ("BRL", "Brazilian Real"),
+    ("EUR", "Euro"),
+    ("CAD", "Canadian Dollar"),
+    ("BTC", "Bitcoin")
+  ]
+
+calculateRateFloat :: Float -> (String, Float) -> (Text, Currency)
+calculateRateFloat btcRate (code, rate) =  (textCode, Currency textCode rateText description rateFloat)
+  where
+    textCode = pack code
+    rateFloat = rate * btcRate
+    rateText = pack $ show rateFloat
+    description = pack (fromMaybe "" (getCurrencyLabelByCode code))
+
+getCurrencyLabelByCode :: String -> Maybe String
+getCurrencyLabelByCode code = fmap snd (L.find (\(code',_) -> code' == code) listOfCurrencyLabels)
 
 convertToFloat :: String -> Float
 convertToFloat = read
@@ -37,16 +63,26 @@ readFileCurrencies = do
     _   -> error "Arquivo com formato incompatível"
 
 
-makeRequest :: IO ()
-makeRequest = do 
+middlewareRequest :: IO [(Text, Currency)]
+middlewareRequest = do 
   file <- readFileCurrencies
 
   runReq defaultHttpConfig $ do
-
-    liftIO $ print file
-
     response <- req GET (https "api.coindesk.com" /: "v1" /: "bpi" /: "currentprice" /: "BTC.json") NoReqBody jsonResponse mempty
 
-    let btc' = (responseBody response :: BTC)
+    let (BTC _ _ (BPI bpi) ) = (responseBody response :: BTC)
 
-    liftIO $ print btc'
+    let mUsd = STS.lookup "USD" bpi
+
+    case mUsd of
+      Just usd -> do
+        let mBtc = STS.lookup "BTC" bpi
+        
+        case mBtc of
+          Just btc -> do
+            let (Currency _ _ _ btcRate) = usd
+            let baseList' = P.map (calculateRateFloat btcRate) file
+
+            liftIO (return (("USD", usd) : ("BTC", btc) : baseList'))
+          _ -> error "Moeda BTC não retornado pela API"
+      _ -> error "Moeda USD não retornado pela API"
